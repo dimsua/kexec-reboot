@@ -153,7 +153,7 @@ def grubby_last_resort
   entries = Array.new
   grubby = `grubby --info=ALL`
   menu = Hash[
-    grubby.split("index=".drop(1).map do |entry|  # Drop first item (blank)
+    grubby.split("index=").drop(1).map do |entry|  # Drop first item (blank)
       values = entry.split("\n")
       [
         values[0].to_i,
@@ -166,22 +166,15 @@ def grubby_last_resort
       ]
     end
   ]
-  variables = grubby.scan(/\$([a-zA-Z0-9_]+)/ms).map {|matches| matches[0]}
-  variables_val = Hash[]
-  variables.each do |variable|
-    `grep "set #{variable}=" /boot/efi/EFI/*/*`.split("\n").each do |match|
-      variables_val["$#{variable}"] = match.split(":", 2)[1].split("=", 2)[1].delete_prefix('"').delete_suffix('"')
-    end
-  end
   menu.each do |index, entry|
-    entry.each do |key, value|
-      variables_val.each {|k,v| entry[key].sub!(k, v)}
-    end
+    args = entry["args"].gsub("\$tuned_params", "").strip
+    # look only for tuned param, because kexec doesnt support multiple initrd https://github.com/error10/kexec-reboot/issues/8
+    tunedparam = `grep "set tuned_params=" /boot/grub2/grub.cfg`.split('=',2)[1].strip.delete_prefix('"').delete_suffix('"')
     entries.push({
       :name    => entry["title"].strip,
       :kernel  => entry["kernel"].strip,
-      :initrd  => entry["initrd"].strip,
-      :cmdline => "root=#{entry["root"]} #{entry["args"]}.strip}",
+      :initrd  => entry["initrd"].gsub("\$tuned_initrd", "").strip,
+      :cmdline => "root=#{entry["root"]} #{args} #{tunedparam}",
     })
   end
   entries
